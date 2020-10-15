@@ -1,0 +1,23 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Static website hosting with S3'
+Parameters:
+  BucketName:
+    Description: Bucket name
+    Type: String
+    Default: 'example'
+Resources:
+  # Create the bucket to contain the website HTML
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      AccessControl: PublicRead
+      BucketName: !Sub '${BucketName}'
+      WebsiteConfiguration:
+        ErrorDocument: 'error.html'
+        IndexDocument: 'index.html'
+Outputs:
+  BucketName:
+    Description: 'S3 Bucket Name'
+    Value: !Ref S3Bucket
