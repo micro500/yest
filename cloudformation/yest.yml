@@ -22,6 +22,25 @@ Resources:
     Properties:
       Description: A test API
       Name: MyRestAPI
+  ApiGatewayModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      ContentType: 'application/json'
+      RestApiId: !Ref MyRestApi
+      Schema: {}
+  ApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref ApiGatewayDeployment
+      Description: Lambda API Stage v0
+      RestApiId: !Ref MyRestApi
+      StageName: 'v0'
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ProxyResourceANY
+    Properties:
+      Description: Lambda API Deployment
+      RestApiId: !Ref MyRestApi
   Stack:
     Type: 'AWS::ApiGateway::Resource'
     Properties:
@@ -36,22 +55,13 @@ Resources:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-        - Effect: Allow
-          Principal:
-            Service:
-            - lambda.amazonaws.com
-          Action:
-          - sts:AssumeRole
-      Path: "/"
-      Policies:
-      - PolicyName: root
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
+          - Effect: 'Allow'
+            Principal:
+              Service:
+                - 'lambda.amazonaws.com'
             Action:
-            - logs:*
-            Resource: arn:aws:logs:*:*:*
+              - 'sts:AssumeRole'
+      Path: '/'
   primer:
     Type: AWS::Lambda::Function
     Properties:
@@ -78,10 +88,35 @@ Resources:
       AuthorizationType: NONE
       Integration:
         Type: AWS_PROXY
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
         IntegrationHttpMethod: POST
-        Uri: !Sub >-
-          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${primer.Arn}/invocations
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${primer.Arn}/invocations'
+  ApiGatewayIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ''
+            Effect: 'Allow'
+            Principal:
+              Service:
+                - 'apigateway.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: '/'
+      Policies:
+        - PolicyName: LambdaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt primer.Arn
 Outputs:
   BucketName:
     Description: 'S3 Bucket Name'
     Value: !Ref S3Bucket
+  APIEndpoint:
+    Description: 'API URL'
+    Value: !Sub 'https://${MyRestApi}.execute-api.us-west-2.amazonaws.com/v0/stack'
