@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<title>Yest - Landing Site</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Raleway">
+<style>
+body,h1 {font-family: "Raleway", sans-serif}
+body, html {height: 100%}
+.bgimg {
+  background-image: url('/w3images/forestbridge.jpg');
+  min-height: 100%;
+  background-position: center;
+  background-size: cover;
+}
+</style>
+<body>
+
+<div class="bgimg w3-display-container w3-animate-opacity w3-text-black">
+  <div class="w3-display-topleft w3-padding-large w3-xlarge">
+    Yest
+  </div>
+  <div class="w3-display-middle">
+    <h1 class="w3-jumbo w3-animate-top">Upload Photo</h1>
+    <hr class="w3-border-grey" style="margin:auto;width:80%">
+<!-- Section for AWS S3 Upload Javascript and bucket hooks -->
+      <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1.24.min.js"></script>
+                <script type="text/javascript" src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+                <script type="text/javascript">
+                    //Bucket Configurations
+                    var bucketName = BUCKET_NAME;       // Edit with actual S3 Bucket Name, Region and Indetity Pool
+                    var bucketRegion = BUCKET_REGION;
+                    var IdentityPoolId = IDENTITY_POOL_ID;
+
+                    AWS.config.update({
+                        region: bucketRegion,
+                        credentials: new AWS.CognitoIdentityCredentials({
+                            IdentityPoolId: IdentityPoolId
+                        })
+                    });
+
+                    var s3 = new AWS.S3({
+                        apiVersion: '2006-03-01',
+                        params: {
+                            Bucket: bucketName
+                        }
+                    });
+                </script>
+<br />
+      
+<!-- File upload feature -->
+<section class="w3-large w3-center">
+
+                <div>
+                    <input type="file" id="fileUpload">
+                </div>
+                <div>
+                    <button onclick="s3upload()">Submit</button>
+                </div>
+                <progress max=”100” value=”0”></progress>           
+</section>
+      <section class="w3-large w3-center">
+<!-- actual S3 File upload function -->
+                <script type="text/javascript">
+                    function s3upload() {
+                        var files = document.getElementById('fileUpload').files;
+                        if (files) {
+                            var file = files[0];
+                            var fileName = file.name;
+                            var filePath = 'my-first-bucket-path/' + fileName;
+                            var fileUrl = 'https://' + bucketRegion + '.amazonaws.com/my-    first-bucket/' + filePath;
+                            s3.upload({
+                                Key: filePath,
+                                Body: file,
+                                ACL: 'public-read'
+                            }, function(err, data) {
+                                if (err) {
+                                    reject('error');
+                                }
+                                alert('Successfully Uploaded!');
+                            }).on('httpUploadProgress', function(progress) {
+                                var uploaded = parseInt((progress.loaded * 100) / progress.total);
+                                $("progress").attr('value', uploaded);
+                            });
+                        }
+                    };
+                </script>
+      </section>
+<!-- Show Photos -->
+
+      
+    <p class="w3-large w3-center">Wait for the Magic!</p>
+  </div>
+  <div class="w3-display-bottomleft w3-padding-large">
+      <i>Powered by </i><b>Team Yest, Bright Minds!</b>
+  </div>
+</div>
+
+</body>
+</html>
