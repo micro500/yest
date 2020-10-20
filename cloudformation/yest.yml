@@ -113,6 +113,57 @@ Resources:
               - Effect: 'Allow'
                 Action: 'lambda:*'
                 Resource: !GetAtt primer.Arn
+  MyEC2Instance: 
+    Type: AWS::EC2::Instance
+    Properties: 
+      ImageId: "ami-0528a5175983e7f28"
+      InstanceType: "t2.small"
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet: 
+            - "sg-06c55e03bed710287"
+          SubnetId: "subnet-65f1f62e"
+      UserData:
+        !Base64 |
+        #!/bin/bash
+        aws ec2 attach-volume --volume-id vol-0cb4249d4522d3fb1 --instance-id $(ec2-metadata --instance-id | cut -d " " -f 2) --device /dev/xvdf --region us-west-2
+        aws ec2 wait volume-in-use --volume-ids vol-0cb4249d4522d3fb1 --region us-west-2
+        sleep 5
+        mkdir /mount_point
+        mount /dev/xvdf /mount_point/
+        chmod 777 /mount_point/
+        yum install docker -y
+        service docker start
+        docker run -p 8080:8080 -p 50000:50000 --mount type=bind,source=/mount_point,target=/var/jenkins_home jenkins/jenkins:lts
+      IamInstanceProfile: !Ref RootInstanceProfile
+  RootRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: '*'
+                Resource: '*'
+  RootInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref RootRole
 Outputs:
   BucketName:
     Description: 'S3 Bucket Name'
@@ -120,3 +171,6 @@ Outputs:
   APIEndpoint:
     Description: 'API URL'
     Value: !Sub 'https://${MyRestApi}.execute-api.us-west-2.amazonaws.com/v0/stack'
+  PublicIp:
+    Description: "Server's PublicIp Address"
+    Value: !GetAtt MyEC2Instance.PublicIp
