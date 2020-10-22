@@ -17,6 +17,14 @@ Resources:
       WebsiteConfiguration:
         ErrorDocument: 'error.html'
         IndexDocument: 'index.html'
+      CorsConfiguration:
+        CorsRules:
+        - AllowedHeaders: ['*']
+          AllowedMethods: [GET, PUT, POST, HEAD]
+          AllowedOrigins: ['*']
+          ExposedHeaders: [Date]
+          Id: myCORSRuleId1
+          MaxAge: '3600'
   MyRestApi:
     Type: 'AWS::ApiGateway::RestApi'
     Properties:
@@ -113,6 +121,24 @@ Resources:
               - Effect: 'Allow'
                 Action: 'lambda:*'
                 Resource: !GetAtt primer.Arn
+  SampleBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket:
+        Ref: S3Bucket
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:GetObject'
+            Effect: Allow
+            Resource:
+              'Fn::Join':
+                - ''
+                - - 'arn:aws:s3:::'
+                  - Ref: S3Bucket
+                  - /*
+            Principal: '*'
+           
 Outputs:
   BucketName:
     Description: 'S3 Bucket Name'
