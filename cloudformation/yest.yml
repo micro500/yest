@@ -122,6 +122,9 @@ Resources:
                 - 'lambda.amazonaws.com'
             Action:
               - 'sts:AssumeRole'
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      - arn:aws:iam::aws:policy/AmazonSSMFullAccess
       Path: '/'
   UploadLambda:
     Type: AWS::Lambda::Function
@@ -137,7 +140,10 @@ Resources:
               # TODO implement
               return {
                   'statusCode': 200,
-                  'body': json.dumps('Hello from Lambda!')
+                  'body': json.dumps('Hello from Lambda!'),
+                  'headers': {
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE'}
               }
       Description: Invoke a function during stack creation.
   ApiGatewayIamRole:
@@ -186,6 +192,92 @@ Resources:
       Value: !Sub 'https://${MyRestApi}.execute-api.us-west-2.amazonaws.com/v0/'
       Description: Yest api endpoint
       AllowedPattern: ".*"
+  UploadFunctionParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: YestUploadFunction
+      Type: String
+      Value: !Ref UploadLambda
+      Description: Yest upload lambda function name
+      AllowedPattern: ".*"
+  UpdateEndpointLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.7
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Handler: index.lambda_handler
+      Code:
+        ZipFile: |
+          import urllib3
+          import json
+          import boto3
+
+          SUCCESS = "SUCCESS"
+          FAILED = "FAILED"
+
+          def send(event, context, responseStatus, responseData, physicalResourceId=None, noEcho=False):
+              responseUrl = event['ResponseURL']
+
+              print(responseUrl)
+
+              responseBody = {}
+              responseBody['Status'] = responseStatus
+              responseBody['Reason'] = 'See the details in CloudWatch Log Stream: ' + context.log_stream_name
+              responseBody['PhysicalResourceId'] = physicalResourceId or context.log_stream_name
+              responseBody['StackId'] = event['StackId']
+              responseBody['RequestId'] = event['RequestId']
+              responseBody['LogicalResourceId'] = event['LogicalResourceId']
+              responseBody['NoEcho'] = noEcho
+              responseBody['Data'] = responseData
+
+              json_responseBody = json.dumps(responseBody)
+
+              print("Response body:\n" + json_responseBody)
+
+              headers = {
+                  'content-type' : '',
+                  'content-length' : str(len(json_responseBody))
+              }
+
+              http = urllib3.PoolManager()
+              
+              try:
+                  response = http.request('PUT',
+                                  responseUrl,
+                                  body = json_responseBody,
+                                  headers = headers,
+                                  retries = False)
+                  print("Status code: " + response.reason)
+              except Exception as e:
+                  print("send(..) failed executing requests.put(..): " + str(e))
+                  
+          def lambda_handler(event, context):
+              send(event, context, SUCCESS, {})
+
+              client = boto3.client('ssm')
+              
+              endpoint = client.get_parameter(Name='YestApiEndpoint')["Parameter"]["Value"]
+              code_bucket = client.get_parameter(Name='YestCodeS3Bucket')["Parameter"]["Value"]
+              
+              file_name = "api_endpoint.js"
+              
+              file_string = "const API_ENDPOINT = '" + endpoint + "'"
+              encoded_string = file_string.encode("utf-8")
+              
+              s3 = boto3.resource("s3")
+              s3.Bucket(code_bucket).put_object(Key=file_name, Body=encoded_string)
+              
+              return None
+  Primerinvoke:
+    Type: AWS::CloudFormation::CustomResource
+    Version: "1.0"
+    DependsOn: 
+      - UpdateEndpointLambda
+      - CodeBucketParameter
+      - ApiEndpointParameter
+      - CodeS3Bucket
+    Properties:
+      ServiceToken: !GetAtt UpdateEndpointLambda.Arn
 Outputs:
   BucketName:
     Description: 'Code S3 Bucket Name'
