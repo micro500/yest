@@ -46,7 +46,7 @@ $(document).ready(function(){
 
     $("#but_upload").click(function(){
         $.ajax({
-          url: API_ENDPOINT + "stack",
+          url: API_ENDPOINT + "upload",
           type: 'get',
           success: function(response){
              if(response != 0){
