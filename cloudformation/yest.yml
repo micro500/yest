@@ -1,19 +1,13 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Static website hosting with S3'
-Parameters:
-  BucketName:
-    Description: Bucket name
-    Type: String
-    Default: 'example'
 Resources:
   # Create the bucket to contain the website HTML
-  S3Bucket:
+  CodeS3Bucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
       AccessControl: PublicRead
-      BucketName: !Sub '${BucketName}'
       WebsiteConfiguration:
         ErrorDocument: 'error.html'
         IndexDocument: 'index.html'
@@ -25,6 +19,53 @@ Resources:
           ExposedHeaders: [Date]
           Id: myCORSRuleId1
           MaxAge: '3600'
+  CodeBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket:
+        Ref: CodeS3Bucket
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:GetObject'
+            Effect: Allow
+            Resource:
+              'Fn::Join':
+                - ''
+                - - 'arn:aws:s3:::'
+                  - Ref: CodeS3Bucket
+                  - /*
+            Principal: '*'
+  ImagesS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      AccessControl: PublicRead
+      CorsConfiguration:
+        CorsRules:
+        - AllowedHeaders: ['*']
+          AllowedMethods: [GET, PUT, POST, HEAD]
+          AllowedOrigins: ['*']
+          ExposedHeaders: [Date]
+          Id: myCORSRuleId1
+          MaxAge: '3600'
+  ImagesBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket:
+        Ref: ImagesS3Bucket
+      PolicyDocument:
+        Statement:
+          - Action:
+              - 's3:GetObject'
+            Effect: Allow
+            Resource:
+              'Fn::Join':
+                - ''
+                - - 'arn:aws:s3:::'
+                  - Ref: ImagesS3Bucket
+                  - /*
+            Principal: '*'
   MyRestApi:
     Type: 'AWS::ApiGateway::RestApi'
     Properties:
@@ -49,14 +90,26 @@ Resources:
     Properties:
       Description: Lambda API Deployment
       RestApiId: !Ref MyRestApi
-  Stack:
+  UploadEndpoint:
     Type: 'AWS::ApiGateway::Resource'
     Properties:
       RestApiId: !Ref MyRestApi
       ParentId: !GetAtt 
         - MyRestApi
         - RootResourceId
-      PathPart: stack
+      PathPart: upload
+  ProxyResourceANY:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref MyRestApi
+      ResourceId: !Ref UploadEndpoint
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UploadLambda.Arn}/invocations'
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -70,7 +123,7 @@ Resources:
             Action:
               - 'sts:AssumeRole'
       Path: '/'
-  primer:
+  UploadLambda:
     Type: AWS::Lambda::Function
     Properties:
       Runtime: python3.7
@@ -87,18 +140,6 @@ Resources:
                   'body': json.dumps('Hello from Lambda!')
               }
       Description: Invoke a function during stack creation.
-  ProxyResourceANY:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref MyRestApi
-      ResourceId: !Ref Stack
-      HttpMethod: GET
-      AuthorizationType: NONE
-      Integration:
-        Type: AWS_PROXY
-        Credentials: !GetAtt ApiGatewayIamRole.Arn
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${primer.Arn}/invocations'
   ApiGatewayIamRole:
     Type: AWS::IAM::Role
     Properties:
@@ -120,29 +161,35 @@ Resources:
             Statement:
               - Effect: 'Allow'
                 Action: 'lambda:*'
-                Resource: !GetAtt primer.Arn
-  SampleBucketPolicy:
-    Type: 'AWS::S3::BucketPolicy'
+                Resource: !GetAtt UploadLambda.Arn   
+  CodeBucketParameter:
+    Type: AWS::SSM::Parameter
     Properties:
-      Bucket:
-        Ref: S3Bucket
-      PolicyDocument:
-        Statement:
-          - Action:
-              - 's3:GetObject'
-            Effect: Allow
-            Resource:
-              'Fn::Join':
-                - ''
-                - - 'arn:aws:s3:::'
-                  - Ref: S3Bucket
-                  - /*
-            Principal: '*'
-           
+      Name: YestCodeS3Bucket
+      Type: String
+      Value: !Ref CodeS3Bucket
+      Description: Yest S3 bucket name for Code
+      AllowedPattern: ".*"
+  ImageBucketParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: YestImagesS3Bucket
+      Type: String
+      Value: !Ref ImagesS3Bucket
+      Description: Yest S3 bucket name for Images
+      AllowedPattern: ".*"
+  ApiEndpointParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: YestApiEndpoint
+      Type: String
+      Value: !Sub 'https://${MyRestApi}.execute-api.us-west-2.amazonaws.com/v0/'
+      Description: Yest api endpoint
+      AllowedPattern: ".*"
 Outputs:
   BucketName:
-    Description: 'S3 Bucket Name'
-    Value: !Ref S3Bucket
+    Description: 'Code S3 Bucket Name'
+    Value: !Ref CodeS3Bucket
   APIEndpoint:
     Description: 'API URL'
-    Value: !Sub 'https://${MyRestApi}.execute-api.us-west-2.amazonaws.com/v0/stack'
+    Value: !Sub 'https://${MyRestApi}.execute-api.us-west-2.amazonaws.com/v0/'
