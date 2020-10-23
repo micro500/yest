@@ -285,3 +285,6 @@ Outputs:
   APIEndpoint:
     Description: 'API URL'
     Value: !Sub 'https://${MyRestApi}.execute-api.us-west-2.amazonaws.com/v0/'
+  WebsiteAddress:
+    Description: 'Website Address'
+    Value: !Sub 'https://${CodeS3Bucket}.s3-us-west-2.amazonaws.com/index.html'
