@@ -49,6 +49,7 @@ $(document).ready(function(){
 
     $("#but_upload").click(function(){
         $("#upload_success").hide()
+        $("#image").hide()
         $.ajax({
           url: API_ENDPOINT + "upload",
           type: 'get',
