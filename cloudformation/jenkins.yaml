@@ -1,5 +1,12 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
+Parameters: 
+  myJenkinsVolume: 
+    Description: EBS Volume with jenkins home
+    Type: "AWS::EC2::Volume::Id"
+  myKeyPair: 
+    Description: Key pair for jenkins ec2 instance
+    Type: "AWS::EC2::KeyPair::KeyName"
 Resources:
   MyEC2Instance: 
     Type: AWS::EC2::Instance
@@ -13,19 +20,25 @@ Resources:
             - !Ref InstanceSecurityGroup
           SubnetId: !Ref PublicSubnet1
       UserData:
-        !Base64 |
-        #!/bin/bash
-        aws ec2 attach-volume --volume-id vol-0cb4249d4522d3fb1 --instance-id $(ec2-metadata --instance-id | cut -d " " -f 2) --device /dev/xvdf --region us-west-2
-        aws ec2 wait volume-in-use --volume-ids vol-0cb4249d4522d3fb1 --region us-west-2
-        sleep 5
-        mkdir /mount_point
-        mount /dev/xvdf /mount_point/
-        chmod 777 /mount_point/
-        yum install docker -y
-        service docker start
-        docker run -p 8080:8080 -p 50000:50000 --mount type=bind,source=/mount_point,target=/var/jenkins_home jenkins/jenkins:lts
+        Fn::Base64:
+          Fn::Sub:
+            |
+            #!/bin/bash
+            aws ec2 attach-volume --volume-id ${myJenkinsVolume} --instance-id $(ec2-metadata --instance-id | cut -d " " -f 2) --device /dev/xvdf --region us-west-2
+            aws ec2 wait volume-in-use --volume-ids ${myJenkinsVolume} --region us-west-2
+            sleep 5
+            sudo yum install git -y
+            mkdir /var/lib/jenkins
+            mount /dev/xvdf /var/lib/jenkins/
+            sudo yum remove java-1.7.0-openjdk
+            sudo yum install java-1.8.0 -y
+            sudo wget -O /etc/yum.repos.d/jenkins.repo http://pkg.jenkins-ci.org/redhat/jenkins.repo
+            sudo rpm --import https://pkg.jenkins.io/redhat/jenkins.io.key
+            sudo yum install jenkins -y
+            chmod 777 /var/lib/jenkins/
+            sudo service jenkins start
       IamInstanceProfile: !Ref RootInstanceProfile
-      KeyName: "pgreenwood"
+      KeyName: !Ref myKeyPair
   RootRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -128,4 +141,7 @@ Resources:
 Outputs:
   PublicIp:
     Description: "Server's PublicIp Address"
-    Value: !GetAtt MyEC2Instance.PublicIp
+    Value: !Sub 'http://${MyEC2Instance.PublicIp}:8080'
+  SecurityGroup:
+    Description: "Server's security group"
+    Value: !Ref InstanceSecurityGroup
