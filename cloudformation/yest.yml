@@ -86,7 +86,9 @@ Resources:
       StageName: 'v0'
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: ProxyResourceANY
+    DependsOn: 
+      - ProxyResourceANY
+      - ProxyResourceANYImages
     Properties:
       Description: Lambda API Deployment
       RestApiId: !Ref MyRestApi
@@ -110,6 +112,28 @@ Resources:
         Credentials: !GetAtt ApiGatewayIamRole.Arn
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UploadLambda.Arn}/invocations'
+        
+  ImagesEndpoint:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref MyRestApi
+      ParentId: !GetAtt 
+        - MyRestApi
+        - RootResourceId
+      PathPart: images
+  ProxyResourceANYImages:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref MyRestApi
+      ResourceId: !Ref ImagesEndpoint
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ImagesLambda.Arn}/invocations'
+
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -145,7 +169,25 @@ Resources:
                   'Access-Control-Allow-Origin': '*',
                   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE'}
               }
-      Description: Invoke a function during stack creation.
+  ImagesLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.7
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Handler: index.lambda_handler
+      Code:
+        ZipFile: |
+          import json
+
+          def lambda_handler(event, context):
+              # TODO implement
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps('Hello from Lambda!'),
+                  'headers': {
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, PUT, DELETE'}
+              }
   ApiGatewayIamRole:
     Type: AWS::IAM::Role
     Properties:
@@ -167,7 +209,9 @@ Resources:
             Statement:
               - Effect: 'Allow'
                 Action: 'lambda:*'
-                Resource: !GetAtt UploadLambda.Arn   
+                Resource: 
+                  - !GetAtt UploadLambda.Arn
+                  - !GetAtt ImagesLambda.Arn
   CodeBucketParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -199,6 +243,14 @@ Resources:
       Type: String
       Value: !Ref UploadLambda
       Description: Yest upload lambda function name
+      AllowedPattern: ".*"
+  ImagesFunctionParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: YestImagesFunction
+      Type: String
+      Value: !Ref ImagesLambda
+      Description: Yest images lambda function name
       AllowedPattern: ".*"
   UpdateEndpointLambda:
     Type: AWS::Lambda::Function

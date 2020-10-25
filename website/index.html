@@ -34,17 +34,21 @@ body, html {height: 100%}
         <input type="file" id="file">
       </div>
       <div v-else>
-        <img id="image" src="image" />
-        <!--<button v-if="!uploadURL" @click="removeImage">Remove image</button>-->
         <button id="but_upload">Upload image</button>
+        <img style="display: none" id="image" src="image" />
+        <h2 style="display: none" id="upload_success">Success! Image uploaded to bucket.</h2>
       </div>
-      <h2 v-if="uploadURL">Success! Image uploaded to bucket.</h2>
+      <div>
+        <button id="load_images">Load previous images</button>
+        <div id="previous_images" style="display: flex"></div>
+      </div>
     </div>
   
     <script>
 $(document).ready(function(){
 
     $("#but_upload").click(function(){
+        $("#upload_success").hide()
         $.ajax({
           url: API_ENDPOINT + "upload",
           type: 'get',
@@ -70,7 +74,8 @@ $(document).ready(function(){
                   processData: false
                }).done(function(data, textStatus, jqXHR) {
                   if (jqXHR.status == 204) {
-                    $("#image").attr("src",url + fields.key); 
+                    $("#image").attr("src",url + fields.key).show(); 
+                    $("#upload_success").show()
                   }
                   else
                   {
@@ -85,72 +90,26 @@ $(document).ready(function(){
           },
        });
      });
-
+     
+     $("#load_images").click(function(){
+        $.ajax({
+          url: API_ENDPOINT + "images",
+          type: 'get',
+          success: function(response){
+             if(response != 0){
+                console.log(response)
+                $("#previous_images").empty()
+                for (i = 0; i < response.length; i++)
+                {
+                    $("#previous_images").append("<img style=\"max-width: 100px\" src='" + response[i] + "'/>");
+                }
+             }else{
+                alert('file not uploaded');
+             }
+          },
+       });
+     });
 });
-    
-    /*
-      const MAX_IMAGE_SIZE = 1000000
-
-      const API_ENDPOINT = '<< ENTER HERE >>' // e.g. https://ab1234ab123.execute-api.us-east-1.amazonaws.com/uploads
-
-      new Vue({
-        el: "#app",
-        data: {
-          image: '',
-          uploadURL: ''
-        },
-        methods: {
-          onFileChange (e) {
-            let files = e.target.files || e.dataTransfer.files
-            if (!files.length) return
-            this.createImage(files[0])
-          },
-          createImage (file) {
-            // var image = new Image()
-            let reader = new FileReader()
-            reader.onload = (e) => {
-              console.log('length: ', e.target.result.includes('data:image/jpeg'))
-              if (!e.target.result.includes('data:image/jpeg')) {
-                return alert('Wrong file type - JPG only.')
-              }
-              if (e.target.result.length > MAX_IMAGE_SIZE) {
-                return alert('Image is loo large.')
-              }
-              this.image = e.target.result
-            }
-            reader.readAsDataURL(file)
-          },
-          removeImage: function (e) {
-            console.log('Remove clicked')
-            this.image = ''
-          },
-          uploadImage: async function (e) {
-            console.log('Upload clicked')
-            // Get the presigned URL
-            const response = await axios({
-              method: 'GET',
-              url: API_ENDPOINT
-            })
-            console.log('Response: ', response)
-            console.log('Uploading: ', this.image)
-            let binary = atob(this.image.split(',')[1])
-            let array = []
-            for (var i = 0; i < binary.length; i++) {
-              array.push(binary.charCodeAt(i))
-            }
-            let blobData = new Blob([new Uint8Array(array)], {type: 'image/jpeg'})
-            console.log('Uploading to: ', response.uploadURL)
-            const result = await fetch(response.uploadURL, {
-              method: 'PUT',
-              body: blobData
-            })
-            console.log('Result: ', result)
-            // Final URL for the user doesn't need the query string params
-            this.uploadURL = response.uploadURL.split('?')[0]
-          }
-        }
-      })
-      */
     </script>
     <style type="text/css">
       body {
